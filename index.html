@@ -150,7 +150,7 @@ function normalizeRange(s,e){ if(!e) return {s,e:s}; let s2=new Date(s), e2=new 
 /* ====== Hämta alla events ====== */
 async function fetchEvents(){
   const base=localStorage.getItem('apiUrl')||API_BASE;
-  const url = base + (base.includes('?') ? '&' : '?') + `action=list`;
+  const url = base;
   const res=await fetch(url,{headers:{'Accept':'application/json'}});
   if(!res.ok) throw new Error('API fel ('+res.status+')');
   const txt=await res.text(); 
