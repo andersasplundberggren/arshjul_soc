@@ -113,7 +113,7 @@
 
 <script>
 /* ====== KONFIG ====== */
-const DEFAULT_API_BASE='https://script.google.com/macros/s/AKfycby9IVmtrsyadh1Yoewk69SYiU91YjEONBaMo_HUMtO0ovysUL4YdD4gxzAWZqsHFYu-/exec?sheet=Soc';
+const DEFAULT_API_BASE='https://script.google.com/macros/s/AKfycbzEoi4hp9OM74MielnvENqA7NdQ8w1XQcsSKqXnfYEYD0vXdYZgOOFyjBC5emlNgVfm/exec?sheet=Soc';
 const API_BASE=localStorage.getItem('apiUrl')||DEFAULT_API_BASE;
 
 /* ====== Hjälpare ====== */
@@ -148,15 +148,12 @@ function yearWindow(y){return{start:new Date(Date.UTC(y,0,1)),end:new Date(Date.
 function normalizeRange(s,e){ if(!e) return {s,e:s}; let s2=new Date(s), e2=new Date(e); while(e2<=s2){ e2.setUTCFullYear(e2.getUTCFullYear()+1); } return {s:s2,e:e2}; }
 
 /* ====== Hämta alla events ====== */
-/* ====== Hämta alla events ====== */
 async function fetchEvents(){
   const base=localStorage.getItem('apiUrl')||API_BASE;
   const url = base;
-  console.log('DEBUG: Anropar URL:', url);
   const res=await fetch(url,{headers:{'Accept':'application/json'}});
   if(!res.ok) throw new Error('API fel ('+res.status+')');
   const txt=await res.text(); 
-  console.log('DEBUG: Fick svar:', txt.substring(0, 100));
   try{return JSON.parse(txt);}catch{throw new Error('API-svar var inte JSON');}
 }
 
