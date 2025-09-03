@@ -187,8 +187,6 @@ function buildLegend(events){
   for(const [cat,col] of cats.entries()){
     const chip=document.createElement('span'); chip.className='chip';
     chip.innerHTML=`<span class="dot" style="background:${col}"></span>${cat}`;
-    chip.style.cursor='pointer';
-    chip.onclick=()=>{ const sel=el('#category'); sel.value=(sel.value===cat?'':cat); updateFilteredUI(); };
     wrap.appendChild(chip);
   }
 }
