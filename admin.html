@@ -166,7 +166,7 @@ function renderEventsList(){
         ${event.description ? `<div style="margin-top:6px; font-size:13px; color:var(--muted)">${event.description}</div>` : ''}
         <div class="event-actions">
           <button class="btn-small btn-edit" onclick="editEvent('${event.id}')">Redigera</button>
-          <button class="btn-small btn-delete" onclick="deleteEvent('${event.id}', '${(event.title || '').replace(/'/g, '\\\')}')">Radera</button>
+          <button class="btn-small btn-delete" onclick="deleteEvent('${event.id}', '${(event.title || '').replace(/'/g, '')}')">Radera</button>
         </div>
       </div>
     `;
