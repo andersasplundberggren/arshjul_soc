@@ -325,7 +325,7 @@ function recomputeView(){
 /* ====== Start ====== */
 window.addEventListener('DOMContentLoaded',()=>{
   initTheme();
-  updateYearDisplay();
+  el('#currentYear').textContent = currentYear; // Direkt uppdatering
   
   // År-navigation
   el('#prevYear').onclick=()=>changeYear(-1);
