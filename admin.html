@@ -203,38 +203,33 @@ function renderEventsList(){
   }
 
   container.innerHTML = filtered.map(event => {
-    const isEditing = currentEditingId === event.id;
-    const title = escapeHTML(event.title || 'Ingen titel');
-    const desc = escapeHTML(event.description || '');
-    const cat = escapeHTML(event.category || '');
-    const loc = escapeHTML(event.location || '');
-    const link = escapeHTML(event.link || '');
-    const dates = `📅 ${formatDate(event.start_date)}${event.end_date && event.end_date !== event.start_date ? ' – ' + formatDate(event.end_date) : ''}`;
+  const isEditing = currentEditingId === event.id;
+  const title = escapeHTML(event.title || 'Ingen titel');
+  const desc = escapeHTML(event.description || '');
+  const cat = escapeHTML(event.category || '');
+  const loc = escapeHTML(event.location || '');
+  const link = escapeHTML(event.link || '');
+  const dates = `📅 ${formatDate(event.start_date)}${event.end_date && event.end_date !== event.start_date ? ' – ' + formatDate(event.end_date) : ''}`;
 
-    return `
-      <div class="event-item ${isEditing ? 'editing' : ''}" data-id="${escapeHTML(event.id)}">
-        <div class="event-title">${title}</div>
-        <div class="event-meta">
-          <span>${dates}</span>
-          ${cat ? `<span>🏷️ ${cat}</span>` : ''}
-          ${loc ? `<span>📍 ${loc}</span>` : ''}
-          ${link ? `<span>🔗 <a href="${link}" target="_blank" rel="noopener noreferrer">länk</a></span>` : ''}
-        </div>
-        ${desc ? `<div style=\"margin-top:6px; font-size:13px; color:var(--muted)\">${desc}</div>` : ''}
-       
-       <div class="event-actions">
-  <button class="btn-small btn-edit" onclick="editEvent('${escapeHTML(event.id)}')">
-    Redigera
-  </button>
-  <button class="btn-small btn-delete" onclick="deleteEvent('${escapeHTML(event.id)}', '${title.replace(/&#39;/g, '')}', this)">
-    Radera
-  </button>
-</div>
+  return `
+    <div class="event-item ${isEditing ? 'editing' : ''}" data-id="${escapeHTML(event.id)}">
+      <div class="event-title">${title}</div>
+      <div class="event-meta">
+        <span>${dates}</span>
+        ${cat ? `<span>🏷️ ${cat}</span>` : ''}
+        ${loc ? `<span>📍 ${loc}</span>` : ''}
+        ${link ? `<span>🔗 <a href="${link}" target="_blank" rel="noopener noreferrer">länk</a></span>` : ''}
+      </div>
+      ${desc ? `<div style="margin-top:6px; font-size:13px; color:var(--muted)">${desc}</div>` : ''}
 
+      <div class="event-actions">
+        <button class="btn-small btn-edit" onclick="editEvent('${escapeHTML(event.id)}')">Redigera</button>
+        <button class="btn-small btn-delete" onclick="deleteEvent('${escapeHTML(event.id)}', '${title.replace(/&#39;/g, '')}', this)">Radera</button>
+      </div>
+    </div>  <!-- 🔧 Viktigt: stänger .event-item -->
+  `;
+}).join('');
 
-
-    `;
-  }).join('');
 }
 
 function formatDate(dateStr) {
