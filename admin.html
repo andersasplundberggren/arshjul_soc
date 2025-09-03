@@ -221,14 +221,17 @@ function renderEventsList(){
           ${link ? `<span>🔗 <a href="${link}" target="_blank" rel="noopener noreferrer">länk</a></span>` : ''}
         </div>
         ${desc ? `<div style=\"margin-top:6px; font-size:13px; color:var(--muted)\">${desc}</div>` : ''}
-        <div class="event-actions">
-        <button class="btn-small btn-edit" onclick="editEvent('${escapeHTML(event.id)}')">
-        Redigera
-        </button>
-        <button class="btn-small btn-delete" onclick="deleteEvent('${escapeHTML(event.id)}', '${title.replace(/&#39;/g, '')}', this)">
-        Radera
-        </button>
+       
+       <div class="event-actions">
+  <button class="btn-small btn-edit" onclick="editEvent('${escapeHTML(event.id)}')">
+    Redigera
+  </button>
+  <button class="btn-small btn-delete" onclick="deleteEvent('${escapeHTML(event.id)}', '${title.replace(/&#39;/g, '')}', this)">
+    Radera
+  </button>
 </div>
+
+
 
     `;
   }).join('');
