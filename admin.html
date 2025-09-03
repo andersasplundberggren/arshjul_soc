@@ -44,8 +44,9 @@
 <body>
   <header>
     <img class="logo" src="https://karlskoga.se/images/18.17cf90041722ce1749b5e/1640015633047/Karlskoga_liggande.png" alt="Karlskoga kommun">
-    <h1>Årshjul admin – Socialförvaltningen</h1>
+    <h1>Årshjul – Socialförvaltningen</h1>
     <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+      <a href="./" class="pill">← Till årshjulet</a>
       <label class="pill" style="gap:6px; cursor:pointer">
         <input id="themeSwitch" type="checkbox" />
         <span id="themeLabel">Mörkt</span>
@@ -144,7 +145,7 @@ async function saveEvent(){
     action:'upsert',
     token:ADMIN_TOKEN,
     sheet:TARGET_SHEET,
-    id:Math.random().toString(36).slice(2,10),
+    id: currentEditingEvent ? currentEditingEvent.id : Math.random().toString(36).slice(2,10),
     title:el('#title').value.trim(),
     description:el('#desc').value.trim(),
     start_date:start,
@@ -160,7 +161,7 @@ async function saveEvent(){
     return; 
   }
 
-  msg.innerHTML='Sparar...';
+  msg.innerHTML = currentEditingEvent ? 'Uppdaterar...' : 'Sparar...';
 
   try{
     const body=new URLSearchParams(payload);
@@ -170,14 +171,22 @@ async function saveEvent(){
     
     if(!res.ok || j.error) throw new Error(j.error||res.status);
     
-    msg.innerHTML='<span class="ok">Händelse sparad ✔</span>';
+    msg.innerHTML = currentEditingEvent ? '<span class="ok">Händelse uppdaterad ✔</span>' : '<span class="ok">Händelse sparad ✔</span>';
     
-    // Rensa formuläret efter lyckad sparning
-    ['title','desc','start','end','link','location','category'].forEach(i=>el('#'+i).value='');
-    el('#color').value='#72a3ff';
+    // Avsluta redigeringsläge
+    if(currentEditingEvent) {
+      cancelEdit();
+    } else {
+      clearForm();
+    }
     
-    // Uppdatera kategorier
-    setTimeout(loadCategories, 500);
+    // Uppdatera listorna
+    setTimeout(() => {
+      loadEvents().then(events => {
+        sessionStorage.setItem('currentEvents', JSON.stringify(events));
+        loadCategories();
+      });
+    }, 500);
     
   }catch(e){
     msg.innerHTML='<span class="err">Fel vid sparning: '+e.message+'</span>';
@@ -188,10 +197,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   initTheme();
   
   el('#save').onclick=saveEvent;
-  el('#clear').onclick=()=>{ 
-    ['title','desc','start','end','link','location','category'].forEach(i=>el('#'+i).value=''); 
-    el('#color').value='#72a3ff';
-  };
+  el('#clear').onclick=clearForm;
+  el('#cancel').onclick=cancelEdit;
 
   loadCategories();
 });
