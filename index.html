@@ -324,16 +324,20 @@ function recomputeView(){
     updateFilteredUI();
   }catch(e){showError(e.message);console.error(e);}
 }
-function populateYears(){const sel=el('#year');const y=new Date().getFullYear();const ys=[y-1,y,y+1,y+2];sel.innerHTML=ys.map(v=>`<option ${v===y?'selected':''} value="${v}">${v}</option>`).join('');}
-
 /* ====== Start ====== */
 window.addEventListener('DOMContentLoaded',()=>{
   initTheme();
-  populateYears();
-  el('#refresh').onclick=()=>loadAll();      // hämta om från Google Sheets
+  updateYearDisplay();
+  
+  // År-navigation
+  el('#prevYear').onclick=()=>changeYear(-1);
+  el('#nextYear').onclick=()=>changeYear(1);
+  
+  // Filterkontroller
+  el('#refresh').onclick=()=>loadAll();
   el('#category').onchange=()=>updateFilteredUI();
   el('#search').oninput=()=>updateFilteredUI();
-  el('#year').onchange=()=>recomputeView();
+  
   loadAll();
 });
 </script>
