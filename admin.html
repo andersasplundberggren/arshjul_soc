@@ -25,7 +25,7 @@
     .logo{height:32px; width:auto; display:block}
     @media (max-width:980px){ .logo{height:26px} }
 
-    .wrap{max-width:800px; margin:20px auto; padding:0 16px; display:grid; gap:16px}
+    .wrap{max-width:900px; margin:20px auto; padding:0 16px; display:grid; gap:16px}
     .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px}
     .row{display:grid; grid-template-columns:1fr 1fr; gap:12px}
     .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
@@ -39,7 +39,11 @@
     .err{color:#ff7a7a}
     .chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
     .chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--card); font-size:12px; cursor:pointer}
-    
+
+    .toolbar{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0 4px}
+    .toolbar input[type="search"]{flex:1 1 220px}
+    .count{font-size:12px; color:var(--muted); margin-left:auto}
+
     .event-item{border:1px solid var(--border); border-radius:10px; padding:12px; margin:8px 0; cursor:pointer; transition:all 0.2s}
     .event-item:hover{background:color-mix(in hsl, var(--card) 80%, var(--accent) 10%)}
     .event-item.editing{border-color:var(--accent); background:color-mix(in hsl, var(--card) 90%, var(--accent) 5%)}
@@ -65,21 +69,34 @@
   </header>
 
   <div class="wrap">
-    <section class="card">
-      <h2 style="margin:0 0 8px">Befintliga händelser</h2>
+    <section class="card" aria-labelledby="eventsHeading">
+      <div style="display:flex; align-items:center; gap:10px; justify-content:space-between">
+        <h2 id="eventsHeading" style="margin:0 0 8px">Befintliga händelser</h2>
+        <div class="count" id="eventsCount"></div>
+      </div>
       <div class="hint">Klicka på "Redigera" för att ändra en händelse eller "Radera" för att ta bort den.</div>
+
+      <!-- Lokal filtrering utan att röra backend -->
+      <div class="toolbar" role="region" aria-label="Filtrering och sök">
+        <input id="search" type="search" placeholder="Sök titel, beskrivning, plats..." />
+        <select id="catFilter" title="Filtrera på kategori">
+          <option value="">Alla kategorier</option>
+        </select>
+        <button id="clearFilters" class="btn-small" type="button" title="Rensa filter">Rensa</button>
+      </div>
+
       <div id="eventsList">
         <div class="empty-state">Laddar händelser...</div>
       </div>
     </section>
 
-    <section class="card">
-      <h2 style="margin:0 0 8px">Kategorier</h2>
+    <section class="card" aria-labelledby="catsHeading">
+      <h2 id="catsHeading" style="margin:0 0 8px">Kategorier</h2>
       <div class="hint">Klicka för att välja en kategori, eller skriv en ny i fältet nedan.</div>
       <div id="catChips" class="chips"></div>
     </section>
 
-    <section class="card">
+    <section class="card" aria-labelledby="formTitle">
       <h2 style="margin:0 0 8px" id="formTitle">Lägg till händelse</h2>
       <div class="row" style="grid-template-columns:2fr 1fr">
         <input id="title" placeholder="Titel" />
@@ -96,10 +113,10 @@
         <input id="link" placeholder="Länk (valfritt)" />
       </div>
       <textarea id="desc" rows="4" placeholder="Beskrivning (valfritt)" style="margin-top:10px"></textarea>
-      <div style="margin-top:10px; display:flex; gap:10px">
+      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap">
         <button id="save"><span id="saveText">Spara händelse</span></button>
-        <button id="clear">Töm formulär</button>
-        <button id="cancel" style="display:none; background:var(--muted)">Avbryt redigering</button>
+        <button id="clear" type="button">Töm formulär</button>
+        <button id="cancel" type="button" style="display:none; background:var(--muted)">Avbryt redigering</button>
       </div>
       <div id="msg" class="hint" style="margin-top:10px"></div>
     </section>
@@ -115,6 +132,22 @@ const ADMIN_TOKEN = 'Password';  // ÄNDRA DETTA till din faktiska token
 const el=s=>document.querySelector(s);
 let currentEditingId = null;
 let allEvents = [];
+let filtered = [];
+let hasUnsavedChanges = false;
+
+// ---- Hjälpfunktioner ----
+function escapeHTML(str){
+  return (str==null?"":String(str))
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function setBusy(btn, busy=true){
+  if(!btn) return; btn.disabled = !!busy; btn.setAttribute('aria-busy', String(!!busy));
+}
 
 function initTheme(){
   const saved=localStorage.getItem('theme2')||'dark';
@@ -126,47 +159,71 @@ function initTheme(){
 
 async function loadEvents(){
   try{
-    const url = API_BASE + (API_BASE.includes('?') ? '&' : '?') + `sheet=${TARGET_SHEET}`;
+    const url = API_BASE + (API_BASE.includes('?') ? '&' : '?') + `sheet=${encodeURIComponent(TARGET_SHEET)}`;
     const res = await fetch(url, {headers: {'Accept': 'application/json'}});
     if(!res.ok) throw new Error('Kunde inte ladda händelser');
-    
-    const data = await res.json();
+
+    // Robust JSON-hantering (vissa Apps Script svarar text/json)
+    let data;
+    const text = await res.text();
+    try { data = JSON.parse(text); } catch { data = []; }
+
     allEvents = Array.isArray(data) ? data : [];
-    
-    renderEventsList();
+    applyFilters();
     updateCategories();
-    
+
   } catch(e) {
     console.error('Fel vid laddning av händelser:', e);
     el('#eventsList').innerHTML = '<div class="empty-state">Kunde inte ladda händelser</div>';
+    el('#eventsCount').textContent = '';
   }
+}
+
+function applyFilters(){
+  const q = (el('#search').value||'').trim().toLowerCase();
+  const cat = el('#catFilter').value;
+
+  filtered = allEvents.filter(ev => {
+    const inCat = !cat || ev.category === cat;
+    if(!q) return inCat;
+    const hay = [ev.title, ev.description, ev.location].map(x => (x||'').toLowerCase()).join(' ');
+    return inCat && hay.includes(q);
+  }).sort((a,b) => (a.start_date||'').localeCompare(b.start_date||''));
+
+  renderEventsList();
 }
 
 function renderEventsList(){
   const container = el('#eventsList');
-  
-  if(allEvents.length === 0) {
-    container.innerHTML = '<div class="empty-state">Inga händelser ännu. Lägg till den första!</div>';
+  el('#eventsCount').textContent = filtered.length ? `${filtered.length} händelser` : '';
+
+  if(filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state">Inga händelser matchar filtret.</div>';
     return;
   }
-  
-  // Sortera efter datum
-  const sorted = [...allEvents].sort((a,b) => a.start_date.localeCompare(b.start_date));
-  
-  container.innerHTML = sorted.map(event => {
+
+  container.innerHTML = filtered.map(event => {
     const isEditing = currentEditingId === event.id;
+    const title = escapeHTML(event.title || 'Ingen titel');
+    const desc = escapeHTML(event.description || '');
+    const cat = escapeHTML(event.category || '');
+    const loc = escapeHTML(event.location || '');
+    const link = escapeHTML(event.link || '');
+    const dates = `📅 ${formatDate(event.start_date)}${event.end_date && event.end_date !== event.start_date ? ' – ' + formatDate(event.end_date) : ''}`;
+
     return `
-      <div class="event-item ${isEditing ? 'editing' : ''}" data-id="${event.id}">
-        <div class="event-title">${event.title || 'Ingen titel'}</div>
+      <div class="event-item ${isEditing ? 'editing' : ''}" data-id="${escapeHTML(event.id)}">
+        <div class="event-title">${title}</div>
         <div class="event-meta">
-          <span>📅 ${formatDate(event.start_date)}${event.end_date && event.end_date !== event.start_date ? ' – ' + formatDate(event.end_date) : ''}</span>
-          ${event.category ? `<span>🏷️ ${event.category}</span>` : ''}
-          ${event.location ? `<span>📍 ${event.location}</span>` : ''}
+          <span>${dates}</span>
+          ${cat ? `<span>🏷️ ${cat}</span>` : ''}
+          ${loc ? `<span>📍 ${loc}</span>` : ''}
+          ${link ? `<span>🔗 <a href="${link}" target="_blank" rel="noopener noreferrer">länk</a></span>` : ''}
         </div>
-        ${event.description ? `<div style="margin-top:6px; font-size:13px; color:var(--muted)">${event.description}</div>` : ''}
+        ${desc ? `<div style="margin-top:6px; font-size:13px; color:var(--muted)">${desc}</div>` : ''}
         <div class="event-actions">
-          <button class="btn-small btn-edit" onclick="editEvent('${event.id}')">Redigera</button>
-          <button class="btn-small btn-delete" onclick="deleteEvent('${event.id}', '${(event.title || '').replace(/'/g, '')}')">Radera</button>
+          <button class="btn-small btn-edit" onclick="editEvent('${escapeHTML(event.id)}')">Redigera</button>
+          <button class="btn-small btn-delete" onclick="deleteEvent('${escapeHTML(event.id)}', '${title.replace(/&#39;/g, '')}', this)">Radera</button>
         </div>
       </div>
     `;
@@ -177,11 +234,7 @@ function formatDate(dateStr) {
   if(!dateStr) return '';
   try {
     const date = new Date(dateStr + 'T12:00:00');
-    return date.toLocaleDateString('sv-SE', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
+    return date.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch(e) {
     return dateStr;
   }
@@ -189,16 +242,25 @@ function formatDate(dateStr) {
 
 function updateCategories(){
   const cats = [...new Set(allEvents.map(e => e.category).filter(Boolean))].sort();
-  
-  const dl = el('#catlist'); 
-  dl.innerHTML = cats.map(c => `<option value="${c}"></option>`).join('');
-  
-  const chips = el('#catChips'); 
+
+  // Datalist till formuläret
+  const dl = el('#catlist');
+  dl.innerHTML = cats.map(c => `<option value="${escapeHTML(c)}"></option>`).join('');
+
+  // Filter dropdown
+  const sel = el('#catFilter');
+  const selVal = sel.value; // bevara vald
+  sel.innerHTML = '<option value="">Alla kategorier</option>' + cats.map(c => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');
+  if([...sel.options].some(o => o.value === selVal)) sel.value = selVal;
+
+  // Chips
+  const chips = el('#catChips');
   chips.innerHTML = '';
   cats.forEach(c => {
-    const span = document.createElement('span'); 
-    span.className = 'chip'; 
+    const span = document.createElement('span');
+    span.className = 'chip';
     span.textContent = c;
+    span.title = 'Klicka för att välja kategori i formuläret';
     span.onclick = () => { el('#category').value = c; };
     chips.appendChild(span);
   });
@@ -207,9 +269,9 @@ function updateCategories(){
 function editEvent(eventId) {
   const event = allEvents.find(e => e.id === eventId);
   if(!event) return;
-  
+
   currentEditingId = eventId;
-  
+
   // Fyll formuläret
   el('#title').value = event.title || '';
   el('#category').value = event.category || '';
@@ -219,15 +281,15 @@ function editEvent(eventId) {
   el('#location').value = event.location || '';
   el('#link').value = event.link || '';
   el('#desc').value = event.description || '';
-  
+
   // Uppdatera UI
   el('#formTitle').textContent = 'Redigera händelse';
   el('#saveText').textContent = 'Uppdatera händelse';
   el('#cancel').style.display = 'inline-block';
-  
+
   // Uppdatera listan för att visa vald händelse
   renderEventsList();
-  
+
   // Scrolla till formuläret
   el('#formTitle').scrollIntoView({behavior: 'smooth'});
 }
@@ -237,52 +299,48 @@ function cancelEdit() {
   el('#formTitle').textContent = 'Lägg till händelse';
   el('#saveText').textContent = 'Spara händelse';
   el('#cancel').style.display = 'none';
-  
+  hasUnsavedChanges = false;
+
   clearForm();
   renderEventsList();
 }
 
 function clearForm() {
-  ['title','desc','start','end','link','location','category'].forEach(i => el('#'+i).value = ''); 
+  ['title','desc','start','end','link','location','category'].forEach(i => el('#'+i).value = '');
   el('#color').value = '#72a3ff';
+  localStorage.removeItem('adminFormDraft');
 }
 
-async function deleteEvent(eventId, eventTitle) {
+async function deleteEvent(eventId, eventTitle, btn) {
   if(!confirm(`Är du säker på att du vill radera "${eventTitle}"?`)) return;
-  
+
   const msg = el('#msg');
   msg.innerHTML = 'Raderar...';
-  
+  setBusy(btn, true);
+
   try {
-    const payload = {
-      action: 'delete',
-      token: ADMIN_TOKEN,
-      sheet: TARGET_SHEET,
-      id: eventId
-    };
-    
+    const payload = { action: 'delete', token: ADMIN_TOKEN, sheet: TARGET_SHEET, id: eventId };
     const body = new URLSearchParams(payload);
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
-      body
-    });
-    
-    const text = await res.text(); 
-    const j = JSON.parse(text);
-    
+    const res = await fetch(API_BASE, { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body });
+
+    const text = await res.text();
+    let j; try { j = JSON.parse(text); } catch { j = {}; }
+
     if(!res.ok || j.error) throw new Error(j.error || res.status);
-    
+
     msg.innerHTML = '<span class="ok">Händelse raderad ✔</span>';
-    
-    // Ladda om händelser
-    setTimeout(() => {
-      loadEvents();
-      msg.innerHTML = '';
-    }, 1500);
-    
+
+    // Optimistisk uppdatering
+    allEvents = allEvents.filter(e => e.id !== eventId);
+    applyFilters();
+
+    setTimeout(() => { msg.innerHTML = ''; }, 1200);
+
   } catch(e) {
-    msg.innerHTML = '<span class="err">Fel vid radering: ' + e.message + '</span>';
+    console.error(e);
+    msg.innerHTML = '<span class="err">Fel vid radering: ' + escapeHTML(e.message) + '</span>';
+  } finally {
+    setBusy(btn, false);
   }
 }
 
@@ -297,11 +355,13 @@ function normalizeEnd(startStr,endStr){
 
 async function saveEvent(){
   const msg=el('#msg');
+  const btn = el('#save');
 
   let start=el('#start').value.trim();
   let end=(el('#end').value||'').trim();
   if(end && start && parseDate(end) && parseDate(start) && parseDate(end) <= parseDate(start)){
-    end = normalizeEnd(start,end);
+    const newEnd = normalizeEnd(start,end);
+    el('#end').value = newEnd;
   }
 
   const payload={
@@ -312,7 +372,7 @@ async function saveEvent(){
     title:el('#title').value.trim(),
     description:el('#desc').value.trim(),
     start_date:start,
-    end_date:end,
+    end_date:(el('#end').value||'').trim(),
     category:el('#category').value.trim() || '',
     color:el('#color').value || '',
     link:el('#link').value.trim() || '',
@@ -325,42 +385,75 @@ async function saveEvent(){
   }
 
   msg.innerHTML = currentEditingId ? 'Uppdaterar...' : 'Sparar...';
+  setBusy(btn, true);
 
   try{
     const body=new URLSearchParams(payload);
     const res=await fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body});
     const text=await res.text(); 
-    const j=JSON.parse(text);
-    
+    let j; try { j = JSON.parse(text); } catch { j = {}; }
+
     if(!res.ok || j.error) throw new Error(j.error||res.status);
-    
+
     msg.innerHTML = currentEditingId ? '<span class="ok">Händelse uppdaterad ✔</span>' : '<span class="ok">Händelse sparad ✔</span>';
-    
+
+    // Optimistisk uppdatering
+    const newEvent = { id: payload.id, title: payload.title, description: payload.description, start_date: payload.start_date, end_date: payload.end_date, category: payload.category, color: payload.color, link: payload.link, location: payload.location };
+    const idx = allEvents.findIndex(e => e.id === newEvent.id);
+    if(idx>=0) allEvents[idx] = newEvent; else allEvents.push(newEvent);
+    applyFilters();
+
     // Återställ formulär
     if(currentEditingId) {
       cancelEdit();
     } else {
       clearForm();
     }
-    
-    // Ladda om händelser
-    setTimeout(() => {
-      loadEvents();
-      msg.innerHTML = '';
-    }, 1500);
-    
+
+    hasUnsavedChanges = false;
+    setTimeout(() => { msg.innerHTML = ''; }, 1200);
+
   }catch(e){
-    msg.innerHTML='<span class="err">Fel vid sparning: '+e.message+'</span>';
+    msg.innerHTML='<span class="err">Fel vid sparning: '+escapeHTML(e.message)+'</span>';
+  } finally {
+    setBusy(btn, false);
   }
 }
 
+// ---- Utkast i localStorage ----
+function attachDraftPersistence(){
+  const ids = ['title','category','start','end','color','location','link','desc'];
+  const read = () => { try { return JSON.parse(localStorage.getItem('adminFormDraft')||'{}'); } catch { return {}; } };
+  const write = (obj) => localStorage.setItem('adminFormDraft', JSON.stringify(obj));
+
+  const draft = read();
+  ids.forEach(id => { if(draft[id]) el('#'+id).value = draft[id]; });
+
+  ids.forEach(id => {
+    el('#'+id).addEventListener('input', () => {
+      const d = read(); d[id] = el('#'+id).value; write(d); hasUnsavedChanges = true;
+    });
+  });
+}
+
+window.addEventListener('beforeunload', (e) => {
+  if(hasUnsavedChanges) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ---- Init ----
 window.addEventListener('DOMContentLoaded',()=>{
   initTheme();
-  
-  el('#save').onclick = saveEvent;
-  el('#clear').onclick = clearForm;
-  el('#cancel').onclick = cancelEdit;
 
+  el('#save').onclick = saveEvent;
+  el('#clear').onclick = () => { if(!hasUnsavedChanges || confirm('Tömma formuläret?')) { clearForm(); hasUnsavedChanges=false; } };
+  el('#cancel').onclick = () => { if(!hasUnsavedChanges || confirm('Avbryt redigering och förlora ändringar?')) cancelEdit(); };
+
+  // Filtrering
+  el('#search').addEventListener('input', applyFilters);
+  el('#catFilter').addEventListener('change', applyFilters);
+  el('#clearFilters').addEventListener('click', () => { el('#search').value=''; el('#catFilter').value=''; applyFilters(); });
+
+  attachDraftPersistence();
   loadEvents();
 });
 </script>
