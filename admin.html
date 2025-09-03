@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Årshjul – Admin</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%2372a3ff'/%3E%3C/svg%3E">
+  <style>
+    :root{ --bg:#0b1220; --fg:#e6eefc; --muted:#9fb0d3; --card:#101a33; --border:#1e2b4f; --accent:#72a3ff; }
+    :root.light{ --bg:#ffffff; --fg:#0b1220; --muted:#52607a; --card:#ffffff; --border:#e5e7eb; --accent:#2b59ff; }
+    *{box-sizing:border-box}
+    body{margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    header{
+      position:sticky; top:0; z-index:30;
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap:12px;
+      padding:12px 16px;
+      background:#ffffff !important;
+      border-bottom:1px solid #e5e7eb;
+      color:#0b1220;
+    }
+    h1{margin:0; font-size:20px}
+    .logo{height:32px; width:auto; display:block}
+    @media (max-width:980px){ .logo{height:26px} }
+
+    .wrap{max-width:800px; margin:20px auto; padding:0 16px; display:grid; gap:16px}
+    .card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px}
+    .row{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+    .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
+    input,textarea,button,select{background:color-mix(in hsl, var(--card) 70%, black 10%); color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:10px 12px}
+    :root.light input,:root.light textarea,:root.light button,:root.light select{ background:color-mix(in hsl, var(--card) 85%, white 10%) }
+    button{cursor:pointer}
+    .pill{display:inline-flex; align-items:center; gap:8px; font-size:12px; padding:6px 10px; border-radius:999px; border:1px solid var(--border)}
+    a{color:var(--accent)}
+    .hint{color:var(--muted); font-size:12px}
+    .ok{color:#5bd6a2}
+    .err{color:#ff7a7a}
+    .chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+    .chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--card); font-size:12px; cursor:pointer}
+  </style>
+</head>
+<body>
+  <header>
+    <img class="logo" src="https://karlskoga.se/images/18.17cf90041722ce1749b5e/1640015633047/Karlskoga_liggande.png" alt="Karlskoga kommun">
+    <h1>Årshjul admin – Socialförvaltningen</h1>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+      <a href="./" class="pill">← Till årshjulet</a>
+      <label class="pill" style="gap:6px; cursor:pointer">
+        <input id="themeSwitch" type="checkbox" />
+        <span id="themeLabel">Mörkt</span>
+      </label>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <section class="card">
+      <h2 style="margin:0 0 8px">Kategorier</h2>
+      <div class="hint">Klicka för att välja en kategori, eller skriv en ny i fältet nedan.</div>
+      <div id="catChips" class="chips"></div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 8px">Lägg till händelse</h2>
+      <div class="row" style="grid-template-columns:2fr 1fr">
+        <input id="title" placeholder="Titel" />
+        <input id="category" list="catlist" placeholder="Kategori (välj eller skriv ny)" />
+        <datalist id="catlist"></datalist>
+      </div>
+      <div class="row3" style="margin-top:10px">
+        <input id="start" type="date" />
+        <input id="end" type="date" />
+        <input id="color" type="color" value="#72a3ff" />
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input id="location" placeholder="Plats (valfritt)" />
+        <input id="link" placeholder="Länk (valfritt)" />
+      </div>
+      <textarea id="desc" rows="4" placeholder="Beskrivning (valfritt)" style="margin-top:10px"></textarea>
+      <div style="margin-top:10px; display:flex; gap:10px">
+        <button id="save">Spara händelse</button>
+        <button id="clear">Töm formulär</button>
+      </div>
+      <div id="msg" class="hint" style="margin-top:10px"></div>
+    </section>
+  </div>
+
+<script>
+// ====== KONFIGURERA DESSA VÄRDEN ======
+const API_BASE = 'https://script.google.com/macros/s/AKfycbzEoi4hp9OM74MielnvENqA7NdQ8w1XQcsSKqXnfYEYD0vXdYZgOOFyjBC5emlNgVfm/exec';
+const TARGET_SHEET = 'Soc';  // ÄNDRA DETTA för att styra vilket blad som används
+const ADMIN_TOKEN = 'Password';  // ÄNDRA DETTA till din faktiska token
+// ==========================================
+
+const el=s=>document.querySelector(s);
+
+function initTheme(){
+  const saved=localStorage.getItem('theme2')||'dark';
+  const root=document.documentElement, sw=el('#themeSwitch'), lbl=el('#themeLabel');
+  const isLight=saved==='light'; root.classList.toggle('light',isLight);
+  sw.checked=isLight; lbl.textContent=isLight?'Ljust':'Mörkt';
+  sw.onchange=()=>{const on=sw.checked; root.classList.toggle('light',on); localStorage.setItem('theme2',on?'light':'dark'); lbl.textContent=on?'Ljust':'Mörkt';};
+}
+
+async function loadCategories(){
+  try{
+    const url = API_BASE + (API_BASE.includes('?') ? '&' : '?') + `sheet=${TARGET_SHEET}`;
+    const res=await fetch(url,{headers:{'Accept':'application/json'}});
+    if(!res.ok) throw new Error();
+    const data=await res.json();
+    const cats=[...new Set((Array.isArray(data)?data:(data.events||[])).map(e=>e.category).filter(Boolean))].sort();
+
+    const dl=el('#catlist'); dl.innerHTML=cats.map(c=>`<option value="${c}"></option>`).join('');
+    const chips=el('#catChips'); chips.innerHTML='';
+    cats.forEach(c=>{
+      const span=document.createElement('span'); span.className='chip'; span.textContent=c;
+      span.onclick=()=>{ el('#category').value=c; };
+      chips.appendChild(span);
+    });
+  }catch(e){
+    console.error('Kunde inte ladda kategorier:', e);
+  }
+}
+
+function fmtDate(d){const y=d.getUTCFullYear();const m=String(d.getUTCMonth()+1).padStart(2,'0');const da=String(d.getUTCDate()).padStart(2,'0');return `${y}-${m}-${da}`;}
+function parseDate(str){ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(str); if(!m) return null; return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],12,0,0)); }
+function normalizeEnd(startStr,endStr){
+  const s=parseDate(startStr); let e=parseDate(endStr);
+  if(!s || !e) return endStr;
+  while(e<=s){ e.setUTCFullYear(e.getUTCFullYear()+1); }
+  return fmtDate(e);
+}
+
+async function saveEvent(){
+  const msg=el('#msg');
+
+  let start=el('#start').value.trim();
+  let end=(el('#end').value||'').trim();
+  if(end && start && parseDate(end) && parseDate(start) && parseDate(end) <= parseDate(start)){
+    end = normalizeEnd(start,end);
+  }
+
+  const payload={
+    action:'upsert',
+    token:ADMIN_TOKEN,
+    sheet:TARGET_SHEET,
+    id:Math.random().toString(36).slice(2,10),
+    title:el('#title').value.trim(),
+    description:el('#desc').value.trim(),
+    start_date:start,
+    end_date:end,
+    category:el('#category').value.trim() || '',
+    color:el('#color').value || '',
+    link:el('#link').value.trim() || '',
+    location:el('#location').value.trim() || ''
+  };
+
+  if(!payload.title || !payload.start_date){ 
+    msg.innerHTML='<span class="err">Titel och startdatum krävs</span>'; 
+    return; 
+  }
+
+  msg.innerHTML='Sparar...';
+
+  try{
+    const body=new URLSearchParams(payload);
+    const res=await fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body});
+    const text=await res.text(); 
+    const j=JSON.parse(text);
+    
+    if(!res.ok || j.error) throw new Error(j.error||res.status);
+    
+    msg.innerHTML='<span class="ok">Händelse sparad ✔</span>';
+    
+    // Rensa formuläret efter lyckad sparning
+    ['title','desc','start','end','link','location','category'].forEach(i=>el('#'+i).value='');
+    el('#color').value='#72a3ff';
+    
+    // Uppdatera kategorier
+    setTimeout(loadCategories, 500);
+    
+  }catch(e){
+    msg.innerHTML='<span class="err">Fel vid sparning: '+e.message+'</span>';
+  }
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  initTheme();
+  
+  el('#save').onclick=saveEvent;
+  el('#clear').onclick=()=>{ 
+    ['title','desc','start','end','link','location','category'].forEach(i=>el('#'+i).value=''); 
+    el('#color').value='#72a3ff';
+  };
+
+  loadCategories();
+});
+</script>
+</body>
+</html>
