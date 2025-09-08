@@ -51,16 +51,18 @@
     .event-meta{font-size:12px; color:var(--muted); display:flex; gap:12px; flex-wrap:wrap}
     .event-actions{margin-top:8px; display:flex; gap:8px}
     .btn-small{padding:4px 8px; font-size:11px; border-radius:6px; cursor:pointer; border:1px solid}
-    .btn-edit{background:var(--accent); color:white; border-color:var(--accent)}
-    .btn-delete{background:transparent; color:var(--err); border-color:var(--err)}
+    /* Låser redigeringsknapparna till mörkt tema-utseende */
+    .btn-edit{background:#72a3ff; color:#ffffff; border-color:#72a3ff}
+    .btn-delete{background:#101a33; color:#ff7a7a; border-color:#ff7a7a}
     .empty-state{text-align:center; padding:40px; color:var(--muted)}
   </style>
 </head>
 <body>
   <header>
     <img class="logo" src="https://karlskoga.se/images/18.17cf90041722ce1749b5e/1640015633047/Karlskoga_liggande.png" alt="Karlskoga kommun">
-    <h1>Årshjul admin – Socialförvaltningen</h1>
+    <h1>Årshjul admin</h1>
     <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+      <button id="logoutBtn" style="padding:4px 8px; font-size:11px; background:var(--muted); color:var(--fg); border:1px solid var(--border); border-radius:6px; cursor:pointer; display:none">Logga ut</button>
       <label class="pill" style="gap:6px; cursor:pointer">
         <input id="themeSwitch" type="checkbox" />
         <span id="themeLabel">Mörkt</span>
@@ -68,7 +70,19 @@
     </div>
   </header>
 
-  <div class="wrap">
+  <!-- Lösenordsskärm -->
+  <div id="loginScreen" class="wrap" style="display:none">
+    <section class="card" style="max-width:400px; margin:40px auto; text-align:center">
+      <h2 style="margin:0 0 16px">Inloggning krävs</h2>
+      <p class="hint" style="margin-bottom:20px">Ange lösenord för att komma åt admin-funktionerna</p>
+      <input id="passwordInput" type="password" placeholder="Lösenord" style="width:100%; margin-bottom:12px" />
+      <button id="loginBtn" style="width:100%; margin-bottom:8px">Logga in</button>
+      <div id="loginError" class="err" style="margin-top:8px; display:none">Fel lösenord</div>
+    </section>
+  </div>
+
+  <!-- Huvudinnehåll -->
+  <div id="mainContent" class="wrap" style="display:none">
     <section class="card" aria-labelledby="catsHeading">
       <h2 id="catsHeading" style="margin:0 0 8px">Kategorier</h2>
       <div class="hint">Klicka för att välja en kategori, eller skriv en ny i fältet nedan.</div>
@@ -127,6 +141,7 @@
 const API_BASE = 'https://script.google.com/macros/s/AKfycbzEoi4hp9OM74MielnvENqA7NdQ8w1XQcsSKqXnfYEYD0vXdYZgOOFyjBC5emlNgVfm/exec';
 const TARGET_SHEET = 'Soc';  // ÄNDRA DETTA för att styra vilket blad som används
 const ADMIN_TOKEN = 'Password';  // ÄNDRA DETTA till din faktiska token
+const LOGIN_PASSWORD = 'admin';  // ÄNDRA DETTA till önskat lösenord
 // ==========================================
 
 const el=s=>document.querySelector(s);
@@ -134,6 +149,39 @@ let currentEditingId = null;
 let allEvents = [];
 let filtered = [];
 let hasUnsavedChanges = false;
+
+// ---- Lösenordsskydd ----
+function checkLogin() {
+  const savedPassword = localStorage.getItem('adminPassword');
+  const isLoggedIn = savedPassword === LOGIN_PASSWORD;
+  
+  el('#loginScreen').style.display = isLoggedIn ? 'none' : 'block';
+  el('#mainContent').style.display = isLoggedIn ? 'block' : 'none';
+  
+  return isLoggedIn;
+}
+
+function handleLogin() {
+  const password = el('#passwordInput').value.trim();
+  const errorEl = el('#loginError');
+  
+  if (password === LOGIN_PASSWORD) {
+    localStorage.setItem('adminPassword', password);
+    errorEl.style.display = 'none';
+    el('#passwordInput').value = '';
+    checkLogin();
+    loadEvents(); // Ladda händelser efter inloggning
+  } else {
+    errorEl.style.display = 'block';
+    el('#passwordInput').value = '';
+    el('#passwordInput').focus();
+  }
+}
+
+function logout() {
+  localStorage.removeItem('adminPassword');
+  checkLogin();
+}
 
 // ---- Hjälpfunktioner ----
 function escapeHTML(str){
@@ -348,11 +396,12 @@ async function deleteEvent(eventId, eventTitle, btn) {
 
 function fmtDate(d){const y=d.getUTCFullYear();const m=String(d.getUTCMonth()+1).padStart(2,'0');const da=String(d.getUTCDate()).padStart(2,'0');return `${y}-${m}-${da}`;}
 function parseDate(str){ const m=/(\d{4})-(\d{2})-(\d{2})/.exec(str); if(!m) return null; return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],12,0,0)); }
+
+// FIXAD VERSION: Tar bort automatisk årsjustering
 function normalizeEnd(startStr,endStr){
-  const s=parseDate(startStr); let e=parseDate(endStr);
-  if(!s || !e) return endStr;
-  while(e<=s){ e.setUTCFullYear(e.getUTCFullYear()+1); }
-  return fmtDate(e);
+  // Ta bara bort den automatiska logiken som lägger till år
+  // Låt användaren själv bestämma datumen
+  return endStr;
 }
 
 async function saveEvent(){
@@ -361,9 +410,12 @@ async function saveEvent(){
 
   let start=el('#start').value.trim();
   let end=(el('#end').value||'').trim();
-  if(end && start && parseDate(end) && parseDate(start) && parseDate(end) <= parseDate(start)){
-    const newEnd = normalizeEnd(start,end);
-    el('#end').value = newEnd;
+  
+  // FIXAD VERSION: Ta bort automatisk datum-normalisering
+  // Bara grundläggande validering utan att ändra datum
+  if(end && start && parseDate(end) && parseDate(start) && parseDate(end) < parseDate(start)){
+    msg.innerHTML='<span class="err">Slutdatum kan inte vara före startdatum</span>'; 
+    return;
   }
 
   const payload={
@@ -374,7 +426,7 @@ async function saveEvent(){
     title:el('#title').value.trim(),
     description:el('#desc').value.trim(),
     start_date:start,
-    end_date:(el('#end').value||'').trim(),
+    end_date:end,
     category:el('#category').value.trim() || '',
     color:el('#color').value || '',
     link:el('#link').value.trim() || '',
@@ -445,6 +497,21 @@ window.addEventListener('beforeunload', (e) => {
 // ---- Init ----
 window.addEventListener('DOMContentLoaded',()=>{
   initTheme();
+
+  // Kontrollera inloggning först
+  if (!checkLogin()) {
+    // Visa bara inloggningsskärmen
+    el('#loginBtn').onclick = handleLogin;
+    el('#passwordInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleLogin();
+    });
+    el('#passwordInput').focus();
+    return; // Stoppa här om inte inloggad
+  }
+
+  // Visa utloggningsknappen
+  el('#logoutBtn').style.display = 'inline-block';
+  el('#logoutBtn').onclick = logout;
 
   el('#save').onclick = saveEvent;
   el('#clear').onclick = () => { if(!hasUnsavedChanges || confirm('Tömma formuläret?')) { clearForm(); hasUnsavedChanges=false; } };
